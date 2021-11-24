@@ -91,9 +91,11 @@ class SSD(nn.Module):
 
         confidences = torch.cat(confidences, 1)
         locations = torch.cat(locations, 1)
+        genders = torch.cat(genders, 1)
         
         if self.is_test:
             confidences = F.softmax(confidences, dim=2)
+            genders = F.softmax(genders, dim=2)
             boxes = box_utils.convert_locations_to_boxes(
                 locations, self.priors, self.config.center_variance, self.config.size_variance
             )
@@ -108,8 +110,8 @@ class SSD(nn.Module):
         confidence = confidence.view(confidence.size(0), -1, self.num_classes)
 
         gender = self.gender_headers[i](x)
-        gender = confidence.permute(0, 2, 3, 1).contiguous()
-        gender = confidence.view(confidence.size(0), -1, self.num_gender_classes)
+        gender = gender.permute(0, 2, 3, 1).contiguous()
+        gender = gender.view(gender.size(0), -1, self.num_gender_classes)
 
         location = self.regression_headers[i](x)
         location = location.permute(0, 2, 3, 1).contiguous()
@@ -158,16 +160,18 @@ class MatchPrior(object):
         self.size_variance = size_variance
         self.iou_threshold = iou_threshold
 
-    def __call__(self, gt_boxes, gt_labels):
+    def __call__(self, gt_boxes, gt_labels, gt_genders):
         if type(gt_boxes) is np.ndarray:
             gt_boxes = torch.from_numpy(gt_boxes)
         if type(gt_labels) is np.ndarray:
             gt_labels = torch.from_numpy(gt_labels)
-        boxes, labels = box_utils.assign_priors(gt_boxes, gt_labels,
+        if type(gt_genders) is np.ndarray:
+            gt_genders = torch.from_numpy(gt_genders)
+        boxes, labels, genders = box_utils.assign_priors(gt_boxes, gt_labels, gt_genders,
                                                 self.corner_form_priors, self.iou_threshold)
         boxes = box_utils.corner_form_to_center_form(boxes)
         locations = box_utils.convert_boxes_to_locations(boxes, self.center_form_priors, self.center_variance, self.size_variance)
-        return locations, labels
+        return locations, labels, genders
 
 
 def _xavier_init_(m: nn.Module):

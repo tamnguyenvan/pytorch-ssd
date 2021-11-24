@@ -1,6 +1,7 @@
 import pathlib
 import cv2
 import numpy as np
+import torch
 from .utils import load_data
 
 class IMDBWikiDataset:
@@ -26,6 +27,7 @@ class IMDBWikiDataset:
             image, boxes, labels, genders = self.transform(image, boxes, labels, genders)
         if self.target_transform:
             boxes, labels, genders = self.target_transform(boxes, labels, genders)
+        
         return image, boxes, labels, genders
     
     def _load_data(self):
@@ -46,8 +48,9 @@ class IMDBWikiDataset:
                 x2 = int((cx + w/2) * img_w)
                 y2 = int((cy + h/2) * img_h)
                 bboxes.append((x1, y1, x2, y2))
-                labels.append(int(class_id))
-                genders.append(int(gender))
+                assert int(class_id) == 0
+                labels.append(int(class_id)+1)  # 0 is preserved for background
+                genders.append(int(gender) + 1)  # 0 is preserved for background
             return (
                 np.array(bboxes, dtype=np.float32),
                 np.array(labels, dtype=np.int64),

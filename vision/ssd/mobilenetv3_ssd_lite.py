@@ -21,7 +21,7 @@ def SeperableConv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=
     )
 
 
-def create_mobilenetv3_large_ssd_lite(num_classes, num_gender_classes=2, width_mult=1.0, use_batch_norm=True, onnx_compatible=False, is_test=False):
+def create_mobilenetv3_large_ssd_lite(num_classes, num_gender_classes=3, width_mult=1.0, use_batch_norm=True, onnx_compatible=False, is_test=False):
     base_net = MobileNetV3_Large().features
 
     source_layer_indexes = [ 15, 21 ]

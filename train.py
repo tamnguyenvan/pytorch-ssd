@@ -317,7 +317,7 @@ if __name__ == '__main__':
 
     net.to(DEVICE)
 
-    criterion = MultiboxLoss(num_classes, num_gender_classes, config.priors, iou_threshold=0.5, neg_pos_ratio=3,
+    criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
                              center_variance=0.1, size_variance=0.2, device=DEVICE)
     optimizer = torch.optim.SGD(params, lr=args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay)

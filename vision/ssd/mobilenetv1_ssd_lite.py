@@ -18,7 +18,7 @@ def SeperableConv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=
     )
 
 
-def create_mobilenetv1_ssd_lite(num_classes, num_gender_classes=2, is_test=False):
+def create_mobilenetv1_ssd_lite(num_classes, num_gender_classes=3, is_test=False):
     base_net = MobileNetV1(1001).model  # disable dropout layer
 
     source_layer_indexes = [

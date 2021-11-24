@@ -348,13 +348,13 @@ class Expand(object):
 
 
 class RandomMirror(object):
-    def __call__(self, image, boxes, classes):
+    def __call__(self, image, boxes, classes, genders):
         _, width, _ = image.shape
         if random.randint(2):
             image = image[:, ::-1]
             boxes = boxes.copy()
             boxes[:, 0::2] = width - boxes[:, 2::-2]
-        return image, boxes, classes
+        return image, boxes, classes, genders
 
 
 class SwapChannels(object):
@@ -405,4 +405,3 @@ class PhotometricDistort(object):
             distort = Compose(self.pd[1:])
         im, boxes, labels, genders = distort(im, boxes, labels, genders)
         return self.rand_light_noise(im, boxes, labels, genders)
-

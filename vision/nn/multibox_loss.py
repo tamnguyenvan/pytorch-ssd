@@ -32,6 +32,7 @@ class MultiboxLoss(nn.Module):
             boxes (batch_size, num_priors, 4): real boxes corresponding all the priors.
         """
         num_classes = confidence.size(2)
+        num_gender_classes = genders.size(2)
         with torch.no_grad():
             # derived from cross_entropy=sum(log(p))
             loss = -F.log_softmax(confidence, dim=2)[:, :, 0]
@@ -41,7 +42,7 @@ class MultiboxLoss(nn.Module):
         classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], size_average=False)
 
         genders = genders[mask, :]
-        gender_loss = F.cross_entropy(genders.reshape(-1, 2), gt_genders[mask], size_average=False)
+        gender_loss = F.cross_entropy(genders.reshape(-1, num_gender_classes), gt_genders[mask], size_average=False)
 
         pos_mask = labels > 0
         predicted_locations = predicted_locations[pos_mask, :].reshape(-1, 4)
