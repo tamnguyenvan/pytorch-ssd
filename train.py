@@ -220,6 +220,11 @@ if __name__ == '__main__':
             store_labels(label_file, dataset.class_names)
             logging.info(dataset)
             num_classes = len(dataset.class_names)
+        elif args.dataset_type == 'imdb-wiki':
+            dataset = IMDBWikiDataset(dataset_path, transform=train_transform,
+                                      target_transform=target_transform)
+            label_file = os.path.join(args.checkpoint_folder, "imdb-wiki-labels.txt")
+            store_labels(label_file, dataset.class_names)
 
         else:
             raise ValueError(f"Dataset type {args.dataset_type} is not supported.")

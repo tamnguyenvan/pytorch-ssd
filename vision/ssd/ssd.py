@@ -10,7 +10,7 @@ GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])  #
 
 
 class SSD(nn.Module):
-    def __init__(self, num_classes: int, base_net: nn.ModuleList, source_layer_indexes: List[int],
+    def __init__(self, num_classes: int, num_gender_classes: int, base_net: nn.ModuleList, source_layer_indexes: List[int],
                  extras: nn.ModuleList, classification_headers: nn.ModuleList,
                  regression_headers: nn.ModuleList, is_test=False, config=None, device=None):
         """Compose a SSD model using the given components.
@@ -18,6 +18,7 @@ class SSD(nn.Module):
         super(SSD, self).__init__()
 
         self.num_classes = num_classes
+        self.num_gender_classes = num_gender_classes
         self.base_net = base_net
         self.source_layer_indexes = source_layer_indexes
         self.extras = extras
@@ -100,7 +101,7 @@ class SSD(nn.Module):
     def compute_header(self, i, x):
         confidence = self.classification_headers[i](x)
         confidence = confidence.permute(0, 2, 3, 1).contiguous()
-        confidence = confidence.view(confidence.size(0), -1, self.num_classes)
+        confidence = confidence.view(confidence.size(0), -1, (self.num_classes + self.num_gender_classes))
 
         location = self.regression_headers[i](x)
         location = location.permute(0, 2, 3, 1).contiguous()
