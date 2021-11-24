@@ -22,7 +22,7 @@ class MultiboxLoss(nn.Module):
         self.priors = priors
         self.priors.to(device)
 
-    def forward(self, confidence, predicted_locations, labels, gt_locations):
+    def forward(self, confidence, predicted_locations, genders, labels, gt_locations, gt_genders):
         """Compute classification loss and smooth l1 loss.
 
         Args:
@@ -39,9 +39,13 @@ class MultiboxLoss(nn.Module):
 
         confidence = confidence[mask, :]
         classification_loss = F.cross_entropy(confidence.reshape(-1, num_classes), labels[mask], size_average=False)
+
+        genders = genders[mask, :]
+        gender_loss = F.cross_entropy(genders.reshape(-1, 2), gt_genders[mask], size_average=False)
+
         pos_mask = labels > 0
         predicted_locations = predicted_locations[pos_mask, :].reshape(-1, 4)
         gt_locations = gt_locations[pos_mask, :].reshape(-1, 4)
         smooth_l1_loss = F.smooth_l1_loss(predicted_locations, gt_locations, size_average=False)
         num_pos = gt_locations.size(0)
-        return smooth_l1_loss/num_pos, classification_loss/num_pos
+        return smooth_l1_loss/num_pos, classification_loss/num_pos, gender_loss/num_pos

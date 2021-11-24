@@ -16,8 +16,7 @@ from vision.ssd.mobilenetv1_ssd_lite import create_mobilenetv1_ssd_lite
 from vision.ssd.mobilenet_v2_ssd_lite import create_mobilenetv2_ssd_lite
 from vision.ssd.mobilenetv3_ssd_lite import create_mobilenetv3_large_ssd_lite, create_mobilenetv3_small_ssd_lite
 from vision.ssd.squeezenet_ssd_lite import create_squeezenet_ssd_lite
-from vision.datasets.voc_dataset import VOCDataset
-from vision.datasets.open_images import OpenImagesDataset
+from vision.datasets.imdb_wiki import IMDBWikiDataset
 from vision.nn.multibox_loss import MultiboxLoss
 from vision.ssd.config import vgg_ssd_config
 from vision.ssd.config import mobilenetv1_ssd_config
@@ -27,8 +26,8 @@ from vision.ssd.data_preprocessing import TrainAugmentation, TestTransform
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
 
-parser.add_argument("--dataset_type", default="voc", type=str,
-                    help='Specify dataset type. Currently support voc and open_images.')
+parser.add_argument("--dataset_type", default="imdb-wiki", type=str,
+                    help='Specify dataset type. Currently support imdb-wiki.')
 
 parser.add_argument('--datasets', nargs='+', help='Dataset directory path')
 parser.add_argument('--validation_dataset', help='Dataset directory path')
@@ -113,35 +112,41 @@ def train(loader, net, criterion, optimizer, device, debug_steps=100, epoch=-1):
     running_loss = 0.0
     running_regression_loss = 0.0
     running_classification_loss = 0.0
+    running_gender_loss = 0.0
     for i, data in enumerate(loader):
-        images, boxes, labels = data
+        images, boxes, labels, gt_genders = data
         images = images.to(device)
         boxes = boxes.to(device)
         labels = labels.to(device)
+        gt_genders = gt_genders.to(device)
 
         optimizer.zero_grad()
-        confidence, locations = net(images)
-        regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)  # TODO CHANGE BOXES
-        loss = regression_loss + classification_loss
+        confidence, locations, genders = net(images)
+        regression_loss, classification_loss, gender_loss = criterion(confidence, locations, genders, labels, boxes, gt_genders)  # TODO CHANGE BOXES
+        loss = regression_loss + classification_loss + gender_loss
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
         running_regression_loss += regression_loss.item()
         running_classification_loss += classification_loss.item()
+        running_gender_loss += gender_loss.item()
         if i and i % debug_steps == 0:
             avg_loss = running_loss / debug_steps
             avg_reg_loss = running_regression_loss / debug_steps
             avg_clf_loss = running_classification_loss / debug_steps
+            avg_gender_loss = running_gender_loss / debug_steps
             logging.info(
                 f"Epoch: {epoch}, Step: {i}, " +
                 f"Average Loss: {avg_loss:.4f}, " +
                 f"Average Regression Loss {avg_reg_loss:.4f}, " +
-                f"Average Classification Loss: {avg_clf_loss:.4f}"
+                f"Average Classification Loss: {avg_clf_loss:.4f}" +
+                f"Average Gender Loss: {avg_gender_loss:.4f}"
             )
             running_loss = 0.0
             running_regression_loss = 0.0
             running_classification_loss = 0.0
+            running_gender_loss = 0.0
 
 
 def test(loader, net, criterion, device):
@@ -149,6 +154,7 @@ def test(loader, net, criterion, device):
     running_loss = 0.0
     running_regression_loss = 0.0
     running_classification_loss = 0.0
+    running_gender_loss = 0.0
     num = 0
     for _, data in enumerate(loader):
         images, boxes, labels = data
@@ -159,13 +165,14 @@ def test(loader, net, criterion, device):
 
         with torch.no_grad():
             confidence, locations = net(images)
-            regression_loss, classification_loss = criterion(confidence, locations, labels, boxes)
-            loss = regression_loss + classification_loss
+            regression_loss, classification_loss, gender_loss = criterion(confidence, locations, labels, boxes)
+            loss = regression_loss + classification_loss + gender_loss
 
         running_loss += loss.item()
         running_regression_loss += regression_loss.item()
         running_classification_loss += classification_loss.item()
-    return running_loss / num, running_regression_loss / num, running_classification_loss / num
+        running_gender_loss += gender_loss.item()
+    return running_loss / num, running_regression_loss / num, running_classification_loss / num, running_gender_loss / num
 
 
 if __name__ == '__main__':
@@ -206,26 +213,28 @@ if __name__ == '__main__':
     logging.info("Prepare training datasets.")
     datasets = []
     for dataset_path in args.datasets:
-        if args.dataset_type == 'voc':
-            dataset = VOCDataset(dataset_path, transform=train_transform,
-                                 target_transform=target_transform)
-            label_file = os.path.join(args.checkpoint_folder, "voc-model-labels.txt")
-            store_labels(label_file, dataset.class_names)
-            num_classes = len(dataset.class_names)
-        elif args.dataset_type == 'open_images':
-            dataset = OpenImagesDataset(dataset_path,
-                 transform=train_transform, target_transform=target_transform,
-                 dataset_type="train", balance_data=args.balance_data)
-            label_file = os.path.join(args.checkpoint_folder, "open-images-model-labels.txt")
-            store_labels(label_file, dataset.class_names)
-            logging.info(dataset)
-            num_classes = len(dataset.class_names)
-        elif args.dataset_type == 'imdb-wiki':
+        # if args.dataset_type == 'voc':
+        #     dataset = VOCDataset(dataset_path, transform=train_transform,
+        #                          target_transform=target_transform)
+        #     label_file = os.path.join(args.checkpoint_folder, "voc-model-labels.txt")
+        #     store_labels(label_file, dataset.class_names)
+        #     num_classes = len(dataset.class_names)
+        # elif args.dataset_type == 'open_images':
+        #     dataset = OpenImagesDataset(dataset_path,
+        #          transform=train_transform, target_transform=target_transform,
+        #          dataset_type="train", balance_data=args.balance_data)
+        #     label_file = os.path.join(args.checkpoint_folder, "open-images-model-labels.txt")
+        #     store_labels(label_file, dataset.class_names)
+        #     logging.info(dataset)
+        #     num_classes = len(dataset.class_names)
+        if args.dataset_type == 'imdb-wiki':
             dataset = IMDBWikiDataset(dataset_path, transform=train_transform,
-                                      target_transform=target_transform)
+                                      target_transform=target_transform,
+                                      split='train')
             label_file = os.path.join(args.checkpoint_folder, "imdb-wiki-labels.txt")
             store_labels(label_file, dataset.class_names)
-
+            num_classes = len(dataset.class_names)
+            num_gender_classes = dataset.num_gender_classes
         else:
             raise ValueError(f"Dataset type {args.dataset_type} is not supported.")
         datasets.append(dataset)
@@ -236,14 +245,18 @@ if __name__ == '__main__':
                               num_workers=args.num_workers,
                               shuffle=True)
     logging.info("Prepare Validation datasets.")
-    if args.dataset_type == "voc":
-        val_dataset = VOCDataset(args.validation_dataset, transform=test_transform,
-                                 target_transform=target_transform, is_test=True)
-    elif args.dataset_type == 'open_images':
-        val_dataset = OpenImagesDataset(dataset_path,
-                                        transform=test_transform, target_transform=target_transform,
-                                        dataset_type="test")
-        logging.info(val_dataset)
+    # if args.dataset_type == "voc":
+    #     val_dataset = VOCDataset(args.validation_dataset, transform=test_transform,
+    #                              target_transform=target_transform, is_test=True)
+    # elif args.dataset_type == 'open_images':
+    #     val_dataset = OpenImagesDataset(dataset_path,
+    #                                     transform=test_transform, target_transform=target_transform,
+    #                                     dataset_type="test")
+    #     logging.info(val_dataset)
+    if args.dataset_type == 'imdb-wiki':
+        val_dataset = IMDBWikiDataset(dataset_path,
+                                      transform=test_transform, target_transform=target_transform,
+                                      split='val')
     logging.info("validation dataset size: {}".format(len(val_dataset)))
 
     val_loader = DataLoader(val_dataset, args.batch_size,
@@ -304,7 +317,7 @@ if __name__ == '__main__':
 
     net.to(DEVICE)
 
-    criterion = MultiboxLoss(config.priors, iou_threshold=0.5, neg_pos_ratio=3,
+    criterion = MultiboxLoss(num_classes, num_gender_classes, config.priors, iou_threshold=0.5, neg_pos_ratio=3,
                              center_variance=0.1, size_variance=0.2, device=DEVICE)
     optimizer = torch.optim.SGD(params, lr=args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay)
@@ -331,12 +344,13 @@ if __name__ == '__main__':
               device=DEVICE, debug_steps=args.debug_steps, epoch=epoch)
         
         if epoch % args.validation_epochs == 0 or epoch == args.num_epochs - 1:
-            val_loss, val_regression_loss, val_classification_loss = test(val_loader, net, criterion, DEVICE)
+            val_loss, val_regression_loss, val_classification_loss, val_gender_loss = test(val_loader, net, criterion, DEVICE)
             logging.info(
                 f"Epoch: {epoch}, " +
                 f"Validation Loss: {val_loss:.4f}, " +
                 f"Validation Regression Loss {val_regression_loss:.4f}, " +
-                f"Validation Classification Loss: {val_classification_loss:.4f}"
+                f"Validation Classification Loss: {val_classification_loss:.4f}" +
+                f"Validation Gender Loss: {val_gender_loss:.4f}"
             )
             model_path = os.path.join(args.checkpoint_folder, f"{args.net}-Epoch-{epoch}-Loss-{val_loss}.pth")
             net.save(model_path)

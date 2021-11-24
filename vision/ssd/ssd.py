@@ -12,7 +12,7 @@ GraphPath = namedtuple("GraphPath", ['s0', 'name', 's1'])  #
 class SSD(nn.Module):
     def __init__(self, num_classes: int, num_gender_classes: int, base_net: nn.ModuleList, source_layer_indexes: List[int],
                  extras: nn.ModuleList, classification_headers: nn.ModuleList,
-                 regression_headers: nn.ModuleList, is_test=False, config=None, device=None):
+                 regression_headers: nn.ModuleList, gender_headers: nn.ModuleList, is_test=False, config=None, device=None):
         """Compose a SSD model using the given components.
         """
         super(SSD, self).__init__()
@@ -24,6 +24,7 @@ class SSD(nn.Module):
         self.extras = extras
         self.classification_headers = classification_headers
         self.regression_headers = regression_headers
+        self.gender_headers = gender_headers
         self.is_test = is_test
         self.config = config
 
@@ -41,6 +42,7 @@ class SSD(nn.Module):
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         confidences = []
         locations = []
+        genders = []
         start_layer_index = 0
         header_index = 0
         for end_layer_index in self.source_layer_indexes:
@@ -70,20 +72,22 @@ class SSD(nn.Module):
                     x = layer(x)
                 end_layer_index += 1
             start_layer_index = end_layer_index
-            confidence, location = self.compute_header(header_index, y)
+            confidence, location, gender = self.compute_header(header_index, y)
             header_index += 1
             confidences.append(confidence)
             locations.append(location)
+            genders.append(gender)
 
         for layer in self.base_net[end_layer_index:]:
             x = layer(x)
 
         for layer in self.extras:
             x = layer(x)
-            confidence, location = self.compute_header(header_index, x)
+            confidence, location, gender = self.compute_header(header_index, x)
             header_index += 1
             confidences.append(confidence)
             locations.append(location)
+            genders.append(gender)
 
         confidences = torch.cat(confidences, 1)
         locations = torch.cat(locations, 1)
@@ -94,20 +98,24 @@ class SSD(nn.Module):
                 locations, self.priors, self.config.center_variance, self.config.size_variance
             )
             boxes = box_utils.center_form_to_corner_form(boxes)
-            return confidences, boxes
+            return confidences, boxes, genders
         else:
-            return confidences, locations
+            return confidences, locations, genders
 
     def compute_header(self, i, x):
         confidence = self.classification_headers[i](x)
         confidence = confidence.permute(0, 2, 3, 1).contiguous()
-        confidence = confidence.view(confidence.size(0), -1, (self.num_classes + self.num_gender_classes))
+        confidence = confidence.view(confidence.size(0), -1, self.num_classes)
+
+        gender = self.gender_headers[i](x)
+        gender = confidence.permute(0, 2, 3, 1).contiguous()
+        gender = confidence.view(confidence.size(0), -1, self.num_gender_classes)
 
         location = self.regression_headers[i](x)
         location = location.permute(0, 2, 3, 1).contiguous()
         location = location.view(location.size(0), -1, 4)
 
-        return confidence, location
+        return confidence, location, gender
 
     def init_from_base_net(self, model):
         self.base_net.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage), strict=True)
@@ -115,15 +123,17 @@ class SSD(nn.Module):
         self.extras.apply(_xavier_init_)
         self.classification_headers.apply(_xavier_init_)
         self.regression_headers.apply(_xavier_init_)
+        self.gender_headers.apply(_xavier_init_)
 
     def init_from_pretrained_ssd(self, model):
         state_dict = torch.load(model, map_location=lambda storage, loc: storage)
-        state_dict = {k: v for k, v in state_dict.items() if not (k.startswith("classification_headers") or k.startswith("regression_headers"))}
+        state_dict = {k: v for k, v in state_dict.items() if not (k.startswith("classification_headers") or k.startswith("regression_headers") or k.startswith("gender_headers"))}
         model_dict = self.state_dict()
         model_dict.update(state_dict)
         self.load_state_dict(model_dict)
         self.classification_headers.apply(_xavier_init_)
         self.regression_headers.apply(_xavier_init_)
+        self.gender_headers.apply(_xavier_init_)
 
     def init(self):
         self.base_net.apply(_xavier_init_)
@@ -131,6 +141,7 @@ class SSD(nn.Module):
         self.extras.apply(_xavier_init_)
         self.classification_headers.apply(_xavier_init_)
         self.regression_headers.apply(_xavier_init_)
+        self.gender_headers.apply(_xavier_init_)
 
     def load(self, model):
         self.load_state_dict(torch.load(model, map_location=lambda storage, loc: storage))

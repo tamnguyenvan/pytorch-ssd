@@ -77,16 +77,24 @@ def create_mobilenetv3_small_ssd_lite(num_classes, num_gender_classes=2, width_m
     ])
 
     classification_headers = ModuleList([
-        SeperableConv2d(in_channels=round(48 * width_mult), out_channels=6 * (num_classes + num_gender_classes), kernel_size=3, padding=1),
-        SeperableConv2d(in_channels=576, out_channels=6 * (num_classes + num_gender_classes), kernel_size=3, padding=1),
-        SeperableConv2d(in_channels=512, out_channels=6 * (num_classes + num_gender_classes), kernel_size=3, padding=1),
-        SeperableConv2d(in_channels=256, out_channels=6 * (num_classes + num_gender_classes), kernel_size=3, padding=1),
-        SeperableConv2d(in_channels=256, out_channels=6 * (num_classes + num_gender_classes), kernel_size=3, padding=1),
-        Conv2d(in_channels=64, out_channels=6 * (num_classes + num_gender_classes), kernel_size=1),
+        SeperableConv2d(in_channels=round(48 * width_mult), out_channels=6 * num_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=576, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=512, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=256, out_channels=6 * num_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=64, out_channels=6 * num_classes, kernel_size=1),
+    ])
+    gender_headers = ModuleList([
+        SeperableConv2d(in_channels=round(48 * width_mult), out_channels=6 * num_gender_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=576, out_channels=6 * num_gender_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=512, out_channels=6 * num_gender_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=256, out_channels=6 * num_gender_classes, kernel_size=3, padding=1),
+        SeperableConv2d(in_channels=256, out_channels=6 * num_gender_classes, kernel_size=3, padding=1),
+        Conv2d(in_channels=64, out_channels=6 * num_gender_classes, kernel_size=1),
     ])
 
     return SSD(num_classes, num_gender_classes, base_net, source_layer_indexes,
-               extras, classification_headers, regression_headers, is_test=is_test, config=config)
+               extras, classification_headers, regression_headers, gender_headers, is_test=is_test, config=config)
 
 
 def create_mobilenetv3_ssd_lite_predictor(net, candidate_size=200, nms_method=None, sigma=0.5, device=torch.device('cpu')):
