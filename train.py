@@ -22,6 +22,10 @@ from vision.ssd.config import vgg_ssd_config
 from vision.ssd.config import mobilenetv1_ssd_config
 from vision.ssd.config import squeezenet_ssd_config
 from vision.ssd.data_preprocessing import TrainAugmentation, TestTransform
+import warnings
+
+warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data", UserWarning)
+
 
 parser = argparse.ArgumentParser(
     description='Single Shot MultiBox Detector Training With Pytorch')
@@ -140,7 +144,7 @@ def train(loader, net, criterion, optimizer, device, debug_steps=100, epoch=-1):
                 f"Epoch: {epoch}, Step: {i}, " +
                 f"Average Loss: {avg_loss:.4f}, " +
                 f"Average Regression Loss {avg_reg_loss:.4f}, " +
-                f"Average Classification Loss: {avg_clf_loss:.4f}" +
+                f"Average Classification Loss: {avg_clf_loss:.4f}, " +
                 f"Average Gender Loss: {avg_gender_loss:.4f}"
             )
             running_loss = 0.0
@@ -157,15 +161,16 @@ def test(loader, net, criterion, device):
     running_gender_loss = 0.0
     num = 0
     for _, data in enumerate(loader):
-        images, boxes, labels = data
+        images, boxes, labels, gt_genders = data
         images = images.to(device)
         boxes = boxes.to(device)
         labels = labels.to(device)
+        gt_genders = gt_genders.to(device)
         num += 1
 
         with torch.no_grad():
-            confidence, locations = net(images)
-            regression_loss, classification_loss, gender_loss = criterion(confidence, locations, labels, boxes)
+            confidence, locations, genders = net(images)
+            regression_loss, classification_loss, gender_loss = criterion(confidence, locations, genders, labels, boxes, gt_genders)
             loss = regression_loss + classification_loss + gender_loss
 
         running_loss += loss.item()
@@ -339,10 +344,10 @@ if __name__ == '__main__':
 
     logging.info(f"Start training from epoch {last_epoch + 1}.")
     for epoch in range(last_epoch + 1, args.num_epochs):
-        scheduler.step()
         train(train_loader, net, criterion, optimizer,
               device=DEVICE, debug_steps=args.debug_steps, epoch=epoch)
         
+        scheduler.step()
         if epoch % args.validation_epochs == 0 or epoch == args.num_epochs - 1:
             val_loss, val_regression_loss, val_classification_loss, val_gender_loss = test(val_loader, net, criterion, DEVICE)
             logging.info(
